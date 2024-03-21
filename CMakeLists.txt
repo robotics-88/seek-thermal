@@ -66,15 +66,9 @@ endif()
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
+    ${catkin_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
 	${PCL_INCLUDE_DIRS}
-)
-
-## Declare a C++ library
-add_library(seek_wrapper
-  src/seek_wrapper.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -99,7 +93,7 @@ add_executable(seek_wrapper_node src/seek_node.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(seek_wrapper_node
-    seek_wrapper
+    seekcamera
     ${catkin_LIBRARIES}
     ${OpenCV_LIBRARIES}
 )
@@ -119,7 +113,7 @@ target_link_libraries(seek_wrapper_node
 
 ## Mark libraries for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_libraries.html
-install(TARGETS seek_wrapper
+install(TARGETS seek_wrapper_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
