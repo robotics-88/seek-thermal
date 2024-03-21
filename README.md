@@ -19,6 +19,9 @@ With device plugged in by USB, run:
 ```
 roslaunch seek_thermal_88 seek.launch
 ```
+If successful, the Rviz window that pops up should look like this:
+
+![thermal image of a cat in Rviz](images/thermal-cat.png)
 
 ## TODO
 
