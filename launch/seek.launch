@@ -1,0 +1,7 @@
+<launch>
+    <arg name="use_rviz" default="true" />
+    <node pkg="seek_thermal_88" type="seek_wrapper_node" name="seek_wrapper" output="screen" respawn="true">
+    </node>
+
+    <node type="rviz" name="seek_rviz" pkg="rviz" args="-d $(find seek_thermal_88)/config/seek.rviz" if="$(arg use_rviz)" />
+</launch>
