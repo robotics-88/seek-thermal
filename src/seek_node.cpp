@@ -5,6 +5,8 @@ Author: Erin Linebarger <erin@robotics88.com>
 
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/SetCameraInfo.h>
 
 // C includes
 #include <cstring>
@@ -31,7 +33,17 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <opencv2/core.hpp>
 
 ros::Publisher image_pub_;
+ros::Publisher info_pub_;
+ros::ServiceServer set_info_service_;
+
 bool seek_ok_ = true;
+sensor_msgs::CameraInfo camera_info_;
+
+bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
+    camera_info_ = req.camera_info;
+    resp.success = true;
+    return true;
+}
 
 // Handles frame available events.
 void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *camera_frame, void *user_data)
@@ -48,13 +60,16 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     const int frame_stride = (int)seekframe_get_line_stride(frame);
     cv::Mat frame_mat(frame_height, frame_width, CV_8UC4, seekframe_get_data(frame));
 
+    ros::Time t = ros::Time::now();
 
     cv_bridge::CvImage image_msg;
     image_msg.header.frame_id = "seek";
-    image_msg.header.stamp = ros::Time::now();
+    image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
     image_msg.image    = frame_mat;
     image_pub_.publish(image_msg.toImageMsg());
+
+    info_pub_.publish(camera_info_);
 }
 
 // Handles camera connect events.
@@ -185,7 +200,9 @@ int main(int argc, char **argv)
     ros::Rate r(1 / (2 * fps)); // Check at twice the desired rate
 
     // ROS setup
-    image_pub_ = nh_.advertise<sensor_msgs::Image>("seek_thermal", 10);
+    image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
+    info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
+    set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
 
     while (ros::ok() && seek_ok_)
     {

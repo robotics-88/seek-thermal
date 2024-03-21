@@ -1,7 +1,10 @@
 <launch>
     <arg name="use_rviz" default="true" />
-    <node pkg="seek_thermal_88" type="seek_wrapper_node" name="seek_wrapper" output="screen" respawn="true">
-    </node>
+    <arg name="camera_name" default="seek_thermal"/>
+    <group ns="$(arg camera_name)">
+        <node pkg="seek_thermal_88" type="seek_wrapper_node" name="seek_wrapper" output="screen" respawn="true">
+        </node>
+    </group>
 
     <node type="rviz" name="seek_rviz" pkg="rviz" args="-d $(find seek_thermal_88)/config/seek.rviz" if="$(arg use_rviz)" />
 </launch>

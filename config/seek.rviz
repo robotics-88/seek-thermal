@@ -53,7 +53,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /seek_thermal
+      Image Topic: /seek_thermal/image_raw
       Max Value: 1
       Median window: 5
       Min Value: 0
