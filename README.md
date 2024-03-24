@@ -17,6 +17,10 @@ cd <your_architecture>
 <SDK/arch>$ sudo chmod u+x bin/*
 ```
 
+On some machines, I had to add this line to ~/.bashrc:
+
+`export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib`
+
 Clone and build. Tested with ROS noetic.
 ```
 mkdir -p catkin_ws/src
