@@ -61,8 +61,8 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     cv::Mat frame_mat(frame_height, frame_width, CV_8UC4, seekframe_get_data(frame));
 
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
-    uint64_t time = header->timestamp_utc_ns;
-    ros::Time t = ros::Time(0, time);
+    uint64_t time = header->timestamp_utc_ns * 1e-9;
+    ros::Time t = ros::Time(time);
 
     cv_bridge::CvImage image_msg;
     image_msg.header.frame_id = "seek";
