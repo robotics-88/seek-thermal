@@ -122,11 +122,23 @@ void handle_camera_error(seekcamera_t *camera, seekcamera_error_t event_status, 
     (void)user_data;
     seekcamera_chipid_t cid{};
     seekcamera_get_chipid(camera, &cid);
-    // TODO see if can reconnect without forcing ROS node respawn, in theory these 2 lines should work but they didn't
-    // seekcamera_capture_session_stop(camera);
-    // handle_camera_connect(camera, event_status, user_data);
     std::cerr << "unhandled camera error: (CID: " << cid << ")" << seekcamera_error_get_str(event_status) << std::endl;
-    ROS_ASSERT(false);
+    
+    // Stop and reconnect
+    seekcamera_error_t stop_status = seekcamera_capture_session_stop(camera);
+    std::cerr << "stop status: (CID: " << cid << ")" << seekcamera_error_get_str(stop_status) << std::endl;
+    seekcamera_error_t start_status = seekcamera_capture_session_start(camera, SEEKCAMERA_FRAME_FORMAT_COLOR_ARGB8888);
+    std::cerr << "reconnect status: (CID: " << cid << ")" << seekcamera_error_get_str(start_status) << std::endl;
+
+    // Need reset color palette in this case too
+	seekcamera_color_palette_t current_palette = SEEKCAMERA_COLOR_PALETTE_HI;
+    seekcamera_error_t status = seekcamera_set_color_palette(camera, current_palette);
+    if (status != SEEKCAMERA_SUCCESS)
+    {
+        std::cerr << "failed to set color palette: " << seekcamera_error_get_str(status) << std::endl;
+        return;
+    }
+	std::cout << "color palette: " << seekcamera_color_palette_get_str(current_palette) << std::endl;
 }
 
 // Handles camera ready to pair events
