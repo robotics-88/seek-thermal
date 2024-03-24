@@ -1,8 +1,22 @@
 # seek-thermal
 
-ROS wrapper for the Seek Mosaic starter kit thermal camera. Built on the Seek SDK v4.4. Uses the Seek API to get frames, OpenCV to read data, and republishes as ROS image topic.
+ROS wrapper for the Seek Mosaic starter kit thermal camera. Built on the Seek SDK v4.3. Uses the Seek API to get frames, OpenCV to read data, and republishes as ROS image topic.
 
 ## Setup
+[Download](https://developer.thermal.com/support/solutions/articles/48001240854-seek-thermal-sdk-v4-3) and install SDK:
+```
+sudo apt-get install libsdl2-dev
+unzip <SDK>
+cd <SDK>
+cd <your_architecture>
+<SDK/arch>$ sudo cp lib/libseekcamera.so /usr/local/lib
+<SDK/arch>$ sudo cp lib/libseekcamera.so.4.3 /usr/local/lib
+<SDK/arch>$ sudo cp -r include/* /usr/local/include
+<SDK/arch>$ sudo cp driver/udev/10-seekthermal.rules /etc/udev/rules.d
+<SDK/arch>$ sudo udevadm control --reload
+<SDK/arch>$ sudo chmod u+x bin/*
+```
+
 Clone and build. Tested with ROS noetic.
 ```
 mkdir -p catkin_ws/src

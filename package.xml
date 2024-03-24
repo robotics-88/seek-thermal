@@ -2,7 +2,7 @@
 <package format="2">
   <name>seek_thermal_88</name>
   <version>1.0.0</version>
-  <description>ROS noetic wrapper for Seek camera SDK v4.4</description>
+  <description>ROS noetic wrapper for Seek camera SDK v4.3</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
