@@ -4,6 +4,8 @@ Author: Erin Linebarger <erin@robotics88.com>
 */
 
 #include <ros/ros.h>
+#include <ros/package.h>
+#include <camera_calibration_parsers/parse.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/SetCameraInfo.h>
@@ -219,6 +221,11 @@ int main(int argc, char **argv)
     image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
     info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
     set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
+
+    // Load camera info from yaml
+    std::string camera_name = "seek_thermal";
+    std::string yaml_path = ros::package::getPath("seek_thermal_88") + "/config/calibration.yaml";
+    camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
 
     while (ros::ok() && seek_ok_)
     {

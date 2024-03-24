@@ -5,7 +5,9 @@ project(seek_thermal_88)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  camera_calibration_parsers
   cv_bridge
+  roslib
   roscpp
   sensor_msgs
   std_msgs

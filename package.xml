@@ -29,7 +29,9 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
+  <depend>camera_calibration_parsers</depend>
   <depend>cv_bridge</depend>
+  <depend>roslib</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
 

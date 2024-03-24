@@ -1,0 +1,20 @@
+image_width: 320
+image_height: 240
+camera_name: seek_thermal
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [337.9337536973578, 0, 200.5485588549831, 0, 337.2396705996675, 155.3449515632867, 0, 0, 1]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [-0.2151828449536564, 0.01056606981700437, 0.0009087392513221645, -0.001350970146815393, 0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [310.5384426710471, 0, 201.7870570724599, 0, 0, 322.5617711584429, 156.6654989896907, 0, 0, 0, 1, 0]
