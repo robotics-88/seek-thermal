@@ -72,6 +72,7 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     image_msg.image    = frame_mat;
     image_pub_.publish(image_msg.toImageMsg());
 
+    camera_info_.header = image_msg.header;
     info_pub_.publish(camera_info_);
 }
 
