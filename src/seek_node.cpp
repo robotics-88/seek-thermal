@@ -41,6 +41,8 @@ ros::ServiceServer set_info_service_;
 bool seek_ok_ = true;
 sensor_msgs::CameraInfo camera_info_;
 
+seekcamera_frame_format_t frame_format = seekcamera_frame_format_t::SEEKCAMERA_FRAME_FORMAT_COLOR_ARGB8888;
+
 bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
     camera_info_ = req.camera_info;
     resp.success = true;
@@ -51,7 +53,7 @@ bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCam
 void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *camera_frame, void *user_data)
 {
     seekframe_t* frame = nullptr;
-    seekcamera_error_t status = seekcamera_frame_get_frame_by_format(camera_frame, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT, &frame);
+    seekcamera_error_t status = seekcamera_frame_get_frame_by_format(camera_frame, frame_format, &frame);
     if(status != SEEKCAMERA_SUCCESS)
     {
         std::cerr << "failed to get frame: " << seekcamera_error_get_str(status) << std::endl;
@@ -70,7 +72,7 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     cv_bridge::CvImage image_msg;
     image_msg.header.frame_id = "seek";
     image_msg.header.stamp = t;
-    image_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
+    image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
     image_msg.image    = frame_mat;
     image_pub_.publish(image_msg.toImageMsg());
 
@@ -95,21 +97,47 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
     }
 
     // Start the capture session.
-    status = seekcamera_capture_session_start(camera, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT);
+    status = seekcamera_capture_session_start(camera, frame_format);
     if (status != SEEKCAMERA_SUCCESS)
     {
         std::cerr << "failed to start capture session: " << seekcamera_error_get_str(status) << std::endl;
         return;
     }
 
-	// seekcamera_color_palette_t current_palette = SEEKCAMERA_COLOR_PALETTE_HI;
-    // status = seekcamera_set_color_palette(camera, current_palette);
-    // if (status != SEEKCAMERA_SUCCESS)
-    // {
-    //     std::cerr << "failed to set color palette: " << seekcamera_error_get_str(status) << std::endl;
-    //     return;
+    status = seekcamera_set_pipeline_mode(camera, SEEKCAMERA_IMAGE_SEEKVISION);
+    if (status != SEEKCAMERA_SUCCESS)
+    {
+        std::cerr << "failed to set image pipeline: " << seekcamera_error_get_str(status) << std::endl;
+        return;
+    }
+
+    // TODO determine later if linear mode is required
+    // if (linear_mode_) {
+    //     ROS_INFO("Setting Seek to linear mode.");
+    //     status = seekcamera_set_agc_mode(camera, seekcamera_agc_mode_t::SEEKCAMERA_AGC_MODE_LINEAR);
+    //     if (status != SEEKCAMERA_SUCCESS)
+    //     {
+    //         std::cerr << "failed to set linear agc: " << seekcamera_error_get_str(status) << std::endl;
+    //         return;
+    //     }
+    //     status = seekcamera_set_linear_agc_lock_mode(camera, seekcamera_linear_agc_lock_mode_t::SEEKCAMERA_LINEAR_AGC_LOCK_MODE_MANUAL);
+    //     if (status != SEEKCAMERA_SUCCESS)
+    //     {
+    //         std::cerr << "failed to set linear agc: " << seekcamera_error_get_str(status) << std::endl;
+    //         return;
+    //     }
+    //     seekcamera_set_linear_agc_lock_min(camera, 0.0);
+    //     seekcamera_set_linear_agc_lock_max(camera, 500.0);
     // }
-	// std::cout << "color palette: " << seekcamera_color_palette_get_str(current_palette) << std::endl;
+
+	seekcamera_color_palette_t current_palette = SEEKCAMERA_COLOR_PALETTE_WHITE_HOT;
+    status = seekcamera_set_color_palette(camera, current_palette);
+    if (status != SEEKCAMERA_SUCCESS)
+    {
+        std::cerr << "failed to set color palette: " << seekcamera_error_get_str(status) << std::endl;
+        return;
+    }
+	std::cout << "color palette: " << seekcamera_color_palette_get_str(current_palette) << std::endl;
 }
 
 // Handles camera disconnect events.
@@ -130,18 +158,8 @@ void handle_camera_error(seekcamera_t *camera, seekcamera_error_t event_status, 
     // Stop and reconnect
     seekcamera_error_t stop_status = seekcamera_capture_session_stop(camera);
     std::cerr << "stop status: (CID: " << cid << ")" << seekcamera_error_get_str(stop_status) << std::endl;
-    seekcamera_error_t start_status = seekcamera_capture_session_start(camera, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT);
+    seekcamera_error_t start_status = seekcamera_capture_session_start(camera, frame_format);
     std::cerr << "reconnect status: (CID: " << cid << ")" << seekcamera_error_get_str(start_status) << std::endl;
-
-    // Need reset color palette in this case too
-	// seekcamera_color_palette_t current_palette = SEEKCAMERA_COLOR_PALETTE_HI;
-    // seekcamera_error_t status = seekcamera_set_color_palette(camera, current_palette);
-    // if (status != SEEKCAMERA_SUCCESS)
-    // {
-    //     std::cerr << "failed to set color palette: " << seekcamera_error_get_str(status) << std::endl;
-    //     return;
-    // }
-	// std::cout << "color palette: " << seekcamera_color_palette_get_str(current_palette) << std::endl;
 }
 
 // Handles camera ready to pair events
