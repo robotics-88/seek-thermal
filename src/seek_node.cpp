@@ -64,6 +64,9 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     const int frame_stride = (int)seekframe_get_line_stride(frame);
     cv::Mat frame_mat(frame_height, frame_width, CV_8UC4, seekframe_get_data(frame));
 
+    cv::cvtColor(frame_mat, frame_mat, CV_BGR2GRAY);
+    frame_mat.convertTo(frame_mat, CV_32FC1);
+
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
     uint64_t time = header->timestamp_utc_ns;
     double sec = time * 1e-9;
@@ -72,7 +75,7 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     cv_bridge::CvImage image_msg;
     image_msg.header.frame_id = "seek";
     image_msg.header.stamp = t;
-    image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
+    image_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
     image_msg.image    = frame_mat;
     image_pub_.publish(image_msg.toImageMsg());
 
