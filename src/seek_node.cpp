@@ -39,6 +39,8 @@ ros::Publisher thermal_pub_;
 ros::Publisher info_pub_;
 ros::ServiceServer set_info_service_;
 
+bool calibration_mode_ = false;
+
 bool seek_ok_ = true;
 sensor_msgs::CameraInfo camera_info_;
 
@@ -160,7 +162,14 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
     //     seekcamera_set_linear_agc_lock_max(camera, 500.0);
     // }
 
-	seekcamera_color_palette_t current_palette = SEEKCAMERA_COLOR_PALETTE_WHITE_HOT;
+	seekcamera_color_palette_t current_palette;
+    if (calibration_mode_) {
+        current_palette = SEEKCAMERA_COLOR_PALETTE_BLACK_HOT;
+    }
+    else {
+        current_palette = SEEKCAMERA_COLOR_PALETTE_WHITE_HOT;
+    }
+     
     status = seekcamera_set_color_palette(camera, current_palette);
     if (status != SEEKCAMERA_SUCCESS)
     {
@@ -243,6 +252,25 @@ int main(int argc, char **argv)
         ros::console::notifyLoggerLevelsChanged();
     }
 
+    ros::NodeHandle nh_;
+    float fps = 30.0; 
+    ros::Rate r(1 / (2 * fps)); // Check at twice the desired rate
+
+    // ROS setup
+    image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
+    thermal_pub_ = nh_.advertise<sensor_msgs::Image>("image_thermal", 10);
+    info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
+    set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
+
+    // Param setup
+    ros::NodeHandle private_nh_("~");
+    private_nh_.param("do_calibrate", calibration_mode_, calibration_mode_);
+
+    // Load camera info from yaml
+    std::string camera_name = "seek_thermal";
+    std::string yaml_path = ros::package::getPath("seek_thermal_88") + "/config/calibration.yaml";
+    camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
+
     // Create the camera manager.
     // This is the structure that owns all Seek camera devices.
     seekcamera_manager_t *manager = nullptr;
@@ -260,21 +288,6 @@ int main(int argc, char **argv)
         std::cerr << "failed to register camera event callback: " << seekcamera_error_get_str(status) << std::endl;
         return 1;
     }
-
-    ros::NodeHandle nh_;
-    float fps = 30.0; 
-    ros::Rate r(1 / (2 * fps)); // Check at twice the desired rate
-
-    // ROS setup
-    image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
-    thermal_pub_ = nh_.advertise<sensor_msgs::Image>("image_thermal", 10);
-    info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
-    set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
-
-    // Load camera info from yaml
-    std::string camera_name = "seek_thermal";
-    std::string yaml_path = ros::package::getPath("seek_thermal_88") + "/config/calibration.yaml";
-    camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
 
     while (ros::ok() && seek_ok_)
     {
