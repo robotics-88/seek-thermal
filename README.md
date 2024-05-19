@@ -41,8 +41,16 @@ If successful, the Rviz window that pops up should look like this:
 
 ![thermal image of a cat in Rviz](images/thermal-cat.png)
 
-## TODO
+## Calibration
 
-* Sometimes the camera device does not connect properly at the start (maybe 25% of the time), so the ROS node is set to crash and respawn in that case. Not ideal but a temporary workaround until we can get it to programmatically reconnect the device.
+To use ROS camera calibration, the BLACK_HOT color map is preferred. Launch with:
+```
+roslaunch seek_thermal_88 seek.launch do_calibrate:=true
+```
 
-* Publishing at a lower rate, about 18 fps. Why?
+Then run ROS camera calibration with, e.g.,:
+```
+rosrun camera_calibration cameracalibrator.py --size 5x3 --square 0.85 image:=/seek_thermal/image_raw camera:=/seek_thermal
+```
+
+It seems to work better with large squares and a halogen lamp (as compared to using sunlight). Recommend a printed sheet of paper rather than a real chessboard to minimize reflections from the lamp.
