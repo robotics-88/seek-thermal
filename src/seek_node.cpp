@@ -35,13 +35,12 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <opencv2/core.hpp>
 
 ros::Publisher image_pub_;
+ros::Publisher thermal_pub_;
 ros::Publisher info_pub_;
 ros::ServiceServer set_info_service_;
 
 bool seek_ok_ = true;
 sensor_msgs::CameraInfo camera_info_;
-
-seekcamera_frame_format_t frame_format = seekcamera_frame_format_t::SEEKCAMERA_FRAME_FORMAT_COLOR_ARGB8888;
 
 bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
     camera_info_ = req.camera_info;
@@ -53,7 +52,7 @@ bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCam
 void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *camera_frame, void *user_data)
 {
     seekframe_t* frame = nullptr;
-    seekcamera_error_t status = seekcamera_frame_get_frame_by_format(camera_frame, frame_format, &frame);
+    seekcamera_error_t status = seekcamera_frame_get_frame_by_format(camera_frame, SEEKCAMERA_FRAME_FORMAT_COLOR_ARGB8888, &frame);
     if(status != SEEKCAMERA_SUCCESS)
     {
         std::cerr << "failed to get frame: " << seekcamera_error_get_str(status) << std::endl;
@@ -61,11 +60,19 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     }
     const int frame_width = (int)seekframe_get_width(frame);
     const int frame_height = (int)seekframe_get_height(frame);
-    const int frame_stride = (int)seekframe_get_line_stride(frame);
-    cv::Mat frame_mat(frame_height, frame_width, CV_8UC4, seekframe_get_data(frame));
 
-    // cv::cvtColor(frame_mat, frame_mat, CV_BGR2GRAY);
-    // frame_mat.convertTo(frame_mat, BGRA);
+    seekframe_t* thermal_frame = nullptr;
+    status = seekcamera_frame_get_frame_by_format(camera_frame, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT, &thermal_frame);
+    if(status != SEEKCAMERA_SUCCESS)
+    {
+        std::cerr << "failed to get thermal frame: " << seekcamera_error_get_str(status) << std::endl;
+        return;
+    }
+    const int thermal_width = (int)seekframe_get_width(thermal_frame);
+    const int thermal_height = (int)seekframe_get_height(thermal_frame);
+
+    cv::Mat frame_mat(frame_height, frame_width, CV_8UC4, seekframe_get_data(frame));
+    cv::Mat thermal_mat(thermal_height, thermal_width, CV_32FC1, seekframe_get_data(thermal_frame));
 
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
     uint64_t time = header->timestamp_utc_ns;
@@ -78,6 +85,12 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
     image_msg.image    = frame_mat;
     image_pub_.publish(image_msg.toImageMsg());
+
+    image_msg.header.frame_id = "seek";
+    image_msg.header.stamp = t;
+    image_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
+    image_msg.image    = thermal_mat;
+    thermal_pub_.publish(image_msg.toImageMsg());
 
     camera_info_.header = image_msg.header;
     info_pub_.publish(camera_info_);
@@ -100,7 +113,7 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
     }
 
     // Start the capture session.
-    status = seekcamera_capture_session_start(camera, frame_format);
+    status = seekcamera_capture_session_start(camera, seekcamera_frame_format_t::SEEKCAMERA_FRAME_FORMAT_COLOR_ARGB8888 | seekcamera_frame_format_t::SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT);
     if (status != SEEKCAMERA_SUCCESS)
     {
         std::cerr << "failed to start capture session: " << seekcamera_error_get_str(status) << std::endl;
@@ -118,6 +131,13 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
     if (status != SEEKCAMERA_SUCCESS)
     {
         std::cerr << "failed to set manual shutter mode: " << seekcamera_error_get_str(status) << std::endl;
+        return;
+    }
+
+    status = seekcamera_set_temperature_unit(camera, SEEKCAMERA_TEMPERATURE_UNIT_FAHRENHEIT);
+    if (status != SEEKCAMERA_SUCCESS)
+    {
+        std::cerr << "failed to set fahrenheit: " << seekcamera_error_get_str(status) << std::endl;
         return;
     }
 
@@ -168,7 +188,7 @@ void handle_camera_error(seekcamera_t *camera, seekcamera_error_t event_status, 
     // Stop and reconnect
     seekcamera_error_t stop_status = seekcamera_capture_session_stop(camera);
     std::cerr << "stop status: (CID: " << cid << ")" << seekcamera_error_get_str(stop_status) << std::endl;
-    seekcamera_error_t start_status = seekcamera_capture_session_start(camera, frame_format);
+    seekcamera_error_t start_status = seekcamera_capture_session_start(camera, seekcamera_frame_format_t::SEEKCAMERA_FRAME_FORMAT_COLOR_ARGB8888 | seekcamera_frame_format_t::SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT);
     std::cerr << "reconnect status: (CID: " << cid << ")" << seekcamera_error_get_str(start_status) << std::endl;
 }
 
@@ -247,6 +267,7 @@ int main(int argc, char **argv)
 
     // ROS setup
     image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
+    thermal_pub_ = nh_.advertise<sensor_msgs::Image>("image_thermal", 10);
     info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
     set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
 
