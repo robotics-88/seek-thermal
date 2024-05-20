@@ -35,19 +35,26 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <opencv2/core.hpp>
 
 ros::Publisher image_pub_;
+ros::Subscriber image_sub_; // Used in offline testing from Seek bag
 ros::Publisher thermal_pub_;
 ros::Publisher info_pub_;
 ros::ServiceServer set_info_service_;
 
 bool calibration_mode_ = false;
+bool offline_ = false;
 
-bool seek_ok_ = true;
 sensor_msgs::CameraInfo camera_info_;
 
 bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
     camera_info_ = req.camera_info;
     resp.success = true;
     return true;
+}
+
+// Used only in offline testing from Seek bag
+void imageCallback(const sensor_msgs::Image::ConstPtr &image) {
+    camera_info_.header = image->header;
+    info_pub_.publish(camera_info_);
 }
 
 // Handles frame available events.
@@ -256,49 +263,57 @@ int main(int argc, char **argv)
     float fps = 30.0; 
     ros::Rate r(1 / (2 * fps)); // Check at twice the desired rate
 
-    // ROS setup
-    image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
-    thermal_pub_ = nh_.advertise<sensor_msgs::Image>("image_thermal", 10);
-    info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
-    set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
-
     // Param setup
     ros::NodeHandle private_nh_("~");
     private_nh_.param("do_calibrate", calibration_mode_, calibration_mode_);
+    private_nh_.param("offline", offline_, offline_);
 
     // Load camera info from yaml
     std::string camera_name = "seek_thermal";
     std::string yaml_path = ros::package::getPath("seek_thermal_88") + "/config/calibration.yaml";
     camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
 
-    // Create the camera manager.
-    // This is the structure that owns all Seek camera devices.
+    // ROS setup
+    image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
+    thermal_pub_ = nh_.advertise<sensor_msgs::Image>("image_thermal", 10);
+    info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
+    set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
+    if (offline_) {
+        image_sub_ = nh_.subscribe<sensor_msgs::Image>("image_raw", 10, &imageCallback);
+    }
+
     seekcamera_manager_t *manager = nullptr;
-    seekcamera_error_t status = seekcamera_manager_create(&manager, SEEKCAMERA_IO_TYPE_USB);
-    if (status != SEEKCAMERA_SUCCESS)
-    {
-        std::cerr << "failed to create camera manager: " << seekcamera_error_get_str(status) << std::endl;
-        return 1;
+    if (!offline_) {
+        // Create the camera manager.
+        // This is the structure that owns all Seek camera devices.
+        seekcamera_error_t status = seekcamera_manager_create(&manager, SEEKCAMERA_IO_TYPE_USB);
+        if (status != SEEKCAMERA_SUCCESS)
+        {
+            std::cerr << "failed to create camera manager: " << seekcamera_error_get_str(status) << std::endl;
+            return 1;
+        }
+
+        // Register an event handler for the camera manager to be called whenever a camera event occurs.
+        status = seekcamera_manager_register_event_callback(manager, camera_event_callback, nullptr);
+        if (status != SEEKCAMERA_SUCCESS)
+        {
+            std::cerr << "failed to register camera event callback: " << seekcamera_error_get_str(status) << std::endl;
+            return 1;
+        }
     }
 
-    // Register an event handler for the camera manager to be called whenever a camera event occurs.
-    status = seekcamera_manager_register_event_callback(manager, camera_event_callback, nullptr);
-    if (status != SEEKCAMERA_SUCCESS)
+    while (ros::ok())
     {
-        std::cerr << "failed to register camera event callback: " << seekcamera_error_get_str(status) << std::endl;
-        return 1;
-    }
-
-    while (ros::ok() && seek_ok_)
-    {
-        ros::spinOnce();
+        ros::spin();
         r.sleep();
     }
 
-    std::cout << "Destroying camera manager" << std::endl;
+    if (!offline_) {
+        std::cout << "Destroying camera manager" << std::endl;
 
-    // Teardown the camera manager.
-    seekcamera_manager_destroy(&manager);
+        // Teardown the camera manager.
+        seekcamera_manager_destroy(&manager);
+    }
 
     ros::shutdown();
 
