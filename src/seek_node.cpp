@@ -136,12 +136,12 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
         return;
     }
 
-    status = seekcamera_set_shutter_mode(camera, SEEKCAMERA_SHUTTER_MODE_MANUAL);
+    /* status = seekcamera_set_shutter_mode(camera, SEEKCAMERA_SHUTTER_MODE_MANUAL);
     if (status != SEEKCAMERA_SUCCESS)
     {
         std::cerr << "failed to set manual shutter mode: " << seekcamera_error_get_str(status) << std::endl;
         return;
-    }
+    } */
 
     status = seekcamera_set_temperature_unit(camera, SEEKCAMERA_TEMPERATURE_UNIT_FAHRENHEIT);
     if (status != SEEKCAMERA_SUCCESS)
