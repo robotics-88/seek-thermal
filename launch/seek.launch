@@ -1,9 +1,14 @@
 <launch>
     <arg name="use_rviz" default="true" />
+    <arg name="do_calibrate" default="false"/>
     <arg name="camera_name" default="seek_thermal"/>
+    <arg name="offline" default="false"/>
     <group ns="$(arg camera_name)">
         <node pkg="seek_thermal_88" type="seek_wrapper_node" name="seek_wrapper" output="screen" respawn="true">
+            <param name="do_calibrate" value="$(arg do_calibrate)"/>
+            <param name="offline" value="$(arg offline)"/>
         </node>
+        <node pkg="image_proc" type="image_proc" name="image_proc"/>
     </group>
 
     <node type="rviz" name="seek_rviz" pkg="rviz" args="-d $(find seek_thermal_88)/config/seek.rviz" if="$(arg use_rviz)" />
