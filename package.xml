@@ -1,8 +1,8 @@
-<?xml version="1.0"?>
-<package format="2">
+<?xml version='1.0' encoding='utf-8'?>
+<package format="3">
   <name>seek_thermal_88</name>
   <version>1.0.0</version>
-  <description>ROS noetic wrapper for Seek camera SDK v4.3</description>
+  <description>ROS2 wrapper for Seek camera SDK v4.3</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -27,18 +27,25 @@
   <!-- Example: -->
   <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>camera_calibration_parsers</depend>
-  <depend>cv_bridge</depend>
-  <depend>roslib</depend>
-  <depend>sensor_msgs</depend>
-  <depend>std_msgs</depend>
+  <build_depend>ament_index_cpp</build_depend>
+  <build_depend>camera_calibration_parsers</build_depend>
+  <build_depend>cv_bridge</build_depend>
+  <build_depend>rclcpp</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+
+  <exec_depend>ament_index_cpp</exec_depend>
+  <exec_depend>camera_calibration_parsers</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <!-- Other tools can request additional information be placed here -->
-
+    <build_type>ament_cmake</build_type>
   </export>
 </package>

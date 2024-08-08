@@ -1,22 +1,22 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(seek_thermal_88)
+
+## System dependencies are found with CMake's conventions
+# find_package(Boost REQUIRED COMPONENTS system)
+find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+find_package(OpenCV REQUIRED)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS
-  camera_calibration_parsers
-  cv_bridge
-  roslib
-  roscpp
-  sensor_msgs
-  std_msgs
-)
+find_package(ament_index_cpp REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(camera_calibration_parsers REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
-## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
-find_package(PCL REQUIRED)
-find_package(OpenCV REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -43,15 +43,6 @@ find_package(OpenCV REQUIRED)
 #   cfg/DynReconf2.cfg
 # )
 
-###################################
-## catkin specific configuration ##
-###################################
-catkin_package(
-  CATKIN_DEPENDS
-    cv_bridge
-    sensor_msgs
-    std_msgs
-)
 
 ###########
 ## Build ##
@@ -68,8 +59,8 @@ endif()
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-    ${catkin_INCLUDE_DIRS}
-    ${OpenCV_INCLUDE_DIRS}
+  include
+  ${OpenCV_INCLUDE_DIRS}
 	${PCL_INCLUDE_DIRS}
 )
 
@@ -93,11 +84,34 @@ add_executable(seek_wrapper_node src/seek_node.cpp)
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+add_library(seek_wrapper 
+  src/seek_wrapper.cpp
+)
+
+## Specify libraries to link a library or executable target against
+target_link_libraries(seek_wrapper
+  seekcamera
+  ${OpenCV_LIBRARIES}
+)
+
+ament_target_dependencies(seek_wrapper
+  ament_index_cpp
+  rclcpp
+  camera_calibration_parsers
+  cv_bridge
+  sensor_msgs
+  std_msgs
+)
+
 ## Specify libraries to link a library or executable target against
 target_link_libraries(seek_wrapper_node
-    seekcamera
-    ${catkin_LIBRARIES}
-    ${OpenCV_LIBRARIES}
+  seek_wrapper
+  seekcamera
+  ${OpenCV_LIBRARIES}
+)
+
+ament_target_dependencies(seek_wrapper_node
+  rclcpp
 )
 
 #############
@@ -116,13 +130,33 @@ target_link_libraries(seek_wrapper_node
 ## Mark libraries for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_libraries.html
 install(TARGETS seek_wrapper_node
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
-#############
-## Testing ##
-#############
-# if(CATKIN_ENABLE_TESTING)
-# endif()
+install(TARGETS 
+    #list of shared libraries
+    seek_wrapper_node
+    ARCHIVE
+    DESTINATION lib
+    LIBRARY
+    DESTINATION lib
+)
+
+install(FILES 
+  #list of necessary files (xml...)
+  README.md
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+
+ament_export_dependencies(rclcpp)
+ament_export_dependencies(camera_calibration_parsers)
+ament_export_dependencies(cv_bridge)
+ament_export_dependencies(sensor_msgs)
+ament_export_dependencies(ament_cmake)
+ament_export_dependencies(std_msgs)
+
+ament_export_include_directories(${INCLUDE_DIRS})
+ament_export_libraries(seek_wrapper)
+
+ament_package()
