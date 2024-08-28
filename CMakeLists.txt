@@ -31,7 +31,6 @@ endif()
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-  include
   ${OpenCV_INCLUDE_DIRS}
 	${PCL_INCLUDE_DIRS}
 )
@@ -40,34 +39,19 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(seek_wrapper_node src/seek_node.cpp)
 
-add_library(seek_wrapper 
-  src/seek_wrapper.cpp
-)
-
 ## Specify libraries to link a library or executable target against
-target_link_libraries(seek_wrapper
+target_link_libraries(seek_wrapper_node
   seekcamera
   ${OpenCV_LIBRARIES}
 )
 
-ament_target_dependencies(seek_wrapper
+ament_target_dependencies(seek_wrapper_node
   ament_index_cpp
   rclcpp
   camera_calibration_parsers
   cv_bridge
   sensor_msgs
   std_msgs
-)
-
-## Specify libraries to link a library or executable target against
-target_link_libraries(seek_wrapper_node
-  seek_wrapper
-  seekcamera
-  ${OpenCV_LIBRARIES}
-)
-
-ament_target_dependencies(seek_wrapper_node
-  rclcpp
 )
 
 #############
@@ -97,7 +81,6 @@ ament_export_dependencies(sensor_msgs)
 ament_export_dependencies(ament_cmake)
 ament_export_dependencies(std_msgs)
 
-ament_export_include_directories(${INCLUDE_DIRS})
-ament_export_libraries(seek_wrapper)
+ament_export_libraries(seek_wrapper_node)
 
 ament_package()
