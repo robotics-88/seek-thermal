@@ -258,14 +258,6 @@ int main(int argc, char **argv)
 
   std::shared_ptr<rclcpp::Node> node = rclcpp::Node::make_shared("seek_wrapper");
 
-//   rclcpp::Service<example_interfaces::srv::AddTwoInts>::SharedPtr service =
-//     node->create_service<example_interfaces::srv::AddTwoInts>("add_two_ints", &add);
-
-//   RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Ready to add two ints.");
-
-    float fps = 30.0; 
-    rclcpp::Rate r(1 / (2 * fps)); // Check at twice the desired rate
-
   node->declare_parameter("do_calibrate", calibration_mode_);
   node->get_parameter("map_frame", calibration_mode_);
   node->declare_parameter("offline", offline_);
@@ -280,6 +272,7 @@ int main(int argc, char **argv)
     image_pub_ = node->create_publisher<sensor_msgs::msg::Image>("image", 10);
     thermal_pub_ = node->create_publisher<sensor_msgs::msg::Image>("image_thermal", 10);
     info_pub_ = node->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", 10);
+    // TODO bring back calibration and offline modes or delete
     // set_info_service_ = node->create_service("set_camera_info", &setCameraInfo);
     // if (offline_) {
     //     image_sub_ = node->create_subscription<sensor_msgs::msg::Image>("image_raw", 10, std::bind(&SeekWrapper::imageCallback, node, _1));
