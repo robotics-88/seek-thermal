@@ -137,6 +137,7 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
         return;
     }
 
+    // TODO decide wheter to set manual shutter mode -- prevents the gaps in footage but causes weird thermal pixels that may get worse with time
     /* status = seekcamera_set_shutter_mode(camera, SEEKCAMERA_SHUTTER_MODE_MANUAL);
     if (status != SEEKCAMERA_SUCCESS)
     {
