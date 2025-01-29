@@ -35,8 +35,6 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/core.hpp>
 
-#include <boost/bind.hpp>
-
 rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
 rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_; // Used in offline testing from Seek bag
 rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr thermal_pub_;
@@ -308,11 +306,7 @@ int main(int argc, char **argv)
         }
     }
 
-    while (rclcpp::ok())
-    {
-        rclcpp::spin(node);
-        r.sleep();
-    }
+    rclcpp::spin(node);
 
     if (!offline_) {
         std::cout << "Destroying camera manager" << std::endl;
