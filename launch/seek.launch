@@ -5,7 +5,7 @@
     <arg name="offline" default="false"/>
     <group>
         <push_ros_namespace namespace="$(var camera_name)"/>
-        <node pkg="seek_thermal_88" exec="seek_wrapper_node" name="seek_wrapper" output="screen" respawn="true">
+        <node pkg="seek_thermal_88" exec="seek_wrapper_node" output="screen" respawn="true">
             <param name="do_calibrate" value="$(var do_calibrate)"/>
             <param name="offline" value="$(var offline)"/>
         </node>
