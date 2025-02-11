@@ -9,12 +9,12 @@ sudo apt-get install libsdl2-dev
 unzip <SDK>
 cd <SDK>
 cd <your_architecture>
-<SDK/arch>$ sudo cp lib/libseekcamera.so /usr/local/lib
-<SDK/arch>$ sudo cp lib/libseekcamera.so.4.3 /usr/local/lib
-<SDK/arch>$ sudo cp -r include/* /usr/local/include
-<SDK/arch>$ sudo cp driver/udev/10-seekthermal.rules /etc/udev/rules.d
-<SDK/arch>$ sudo udevadm control --reload
-<SDK/arch>$ sudo chmod u+x bin/*
+sudo cp lib/libseekcamera.so /usr/local/lib
+sudo cp lib/libseekcamera.so.4.4 /usr/local/lib
+sudo cp -r include/* /usr/local/include
+sudo cp driver/udev/10-seekthermal.rules /etc/udev/rules.d
+sudo udevadm control --reload
+sudo chmod u+x bin/*
 ```
 
 On some machines, I had to add this line to ~/.bashrc:

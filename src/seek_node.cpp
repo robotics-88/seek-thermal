@@ -3,12 +3,13 @@
 Author: Erin Linebarger <erin@robotics88.com>
 */
 
-#include <ros/ros.h>
-#include <ros/package.h>
-#include <camera_calibration_parsers/parse.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <sensor_msgs/SetCameraInfo.h>
+#include <rclcpp/rclcpp.hpp>
+#include <camera_calibration_parsers/parse.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+// #include <sensor_msgs/srv/set_camera_info.h>
+
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 // C includes
 #include <cstring>
@@ -34,27 +35,27 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/core.hpp>
 
-ros::Publisher image_pub_;
-ros::Subscriber image_sub_; // Used in offline testing from Seek bag
-ros::Publisher thermal_pub_;
-ros::Publisher info_pub_;
-ros::ServiceServer set_info_service_;
+rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_; // Used in offline testing from Seek bag
+rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr thermal_pub_;
+rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
+// rclcpp::Service<sensor_msgs::srv::SetCameraInfo>::SharedPtr set_info_service_;
 
 bool calibration_mode_ = false;
 bool offline_ = false;
 
-sensor_msgs::CameraInfo camera_info_;
+sensor_msgs::msg::CameraInfo camera_info_;
 
-bool setCameraInfo(sensor_msgs::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
-    camera_info_ = req.camera_info;
-    resp.success = true;
-    return true;
-}
+// bool setCameraInfo(sensor_msgs::srv::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
+//     camera_info_ = req.camera_info;
+//     resp.success = true;
+//     return true;
+// }
 
 // Used only in offline testing from Seek bag
-void imageCallback(const sensor_msgs::Image::ConstPtr &image) {
+void imageCallback(const sensor_msgs::msg::Image::ConstPtr &image) {
     camera_info_.header = image->header;
-    info_pub_.publish(camera_info_);
+    info_pub_->publish(camera_info_);
 }
 
 // Handles frame available events.
@@ -86,23 +87,23 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
     uint64_t time = header->timestamp_utc_ns;
     double sec = time * 1e-9;
-    ros::Time t = ros::Time(sec);
+    rclcpp::Time t = rclcpp::Time(sec);
 
     cv_bridge::CvImage image_msg;
     image_msg.header.frame_id = "seek";
     image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
     image_msg.image    = frame_mat;
-    image_pub_.publish(image_msg.toImageMsg());
+    image_pub_->publish(*(image_msg.toImageMsg()).get());
 
     image_msg.header.frame_id = "seek";
     image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
     image_msg.image    = thermal_mat;
-    thermal_pub_.publish(image_msg.toImageMsg());
+    thermal_pub_->publish(*(image_msg.toImageMsg()).get());
 
     camera_info_.header = image_msg.header;
-    info_pub_.publish(camera_info_);
+    info_pub_->publish(camera_info_);
 }
 
 // Handles camera connect events.
@@ -136,6 +137,7 @@ void handle_camera_connect(seekcamera_t *camera, seekcamera_error_t event_status
         return;
     }
 
+    // TODO decide wheter to set manual shutter mode -- prevents the gaps in footage but causes weird thermal pixels that may get worse with time
     /* status = seekcamera_set_shutter_mode(camera, SEEKCAMERA_SHUTTER_MODE_MANUAL);
     if (status != SEEKCAMERA_SUCCESS)
     {
@@ -250,42 +252,38 @@ void camera_event_callback(seekcamera_t *camera, seekcamera_manager_event_t even
     }
 }
 
+
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "seek_wrapper");
-    if (ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,
-                                       ros::console::levels::Debug))
-    {
-        ros::console::notifyLoggerLevelsChanged();
-    }
+  rclcpp::init(argc, argv);
 
-    ros::NodeHandle nh_;
-    float fps = 30.0; 
-    ros::Rate r(1 / (2 * fps)); // Check at twice the desired rate
+  std::shared_ptr<rclcpp::Node> node = rclcpp::Node::make_shared("seek_wrapper");
 
-    // Param setup
-    ros::NodeHandle private_nh_("~");
-    private_nh_.param("do_calibrate", calibration_mode_, calibration_mode_);
-    private_nh_.param("offline", offline_, offline_);
+  node->declare_parameter("do_calibrate", calibration_mode_);
+  node->get_parameter("map_frame", calibration_mode_);
+  node->declare_parameter("offline", offline_);
+  node->get_parameter("offline", offline_);
 
     // Load camera info from yaml
     std::string camera_name = "seek_thermal";
-    std::string yaml_path = ros::package::getPath("seek_thermal_88") + "/config/calibration.yaml";
+    std::string yaml_path = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
     camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
 
     // ROS setup
-    image_pub_ = nh_.advertise<sensor_msgs::Image>("image_raw", 10);
-    thermal_pub_ = nh_.advertise<sensor_msgs::Image>("image_thermal", 10);
-    info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>("camera_info", 10);
-    set_info_service_ = nh_.advertiseService("set_camera_info", &setCameraInfo);
-    if (offline_) {
-        image_sub_ = nh_.subscribe<sensor_msgs::Image>("image_raw", 10, &imageCallback);
-    }
+    image_pub_ = node->create_publisher<sensor_msgs::msg::Image>("image", 10);
+    thermal_pub_ = node->create_publisher<sensor_msgs::msg::Image>("image_thermal", 10);
+    info_pub_ = node->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", 10);
+    // TODO bring back calibration and offline modes or delete
+    // set_info_service_ = node->create_service("set_camera_info", &setCameraInfo);
+    // if (offline_) {
+    //     image_sub_ = node->create_subscription<sensor_msgs::msg::Image>("image_raw", 10, std::bind(&SeekWrapper::imageCallback, node, _1));
+    // }
+
 
     seekcamera_manager_t *manager = nullptr;
     if (!offline_) {
         // Create the camera manager.
-        // This is the structure that owns all Seek camera devices.
+        // node is the structure that owns all Seek camera devices.
         seekcamera_error_t status = seekcamera_manager_create(&manager, SEEKCAMERA_IO_TYPE_USB);
         if (status != SEEKCAMERA_SUCCESS)
         {
@@ -302,11 +300,7 @@ int main(int argc, char **argv)
         }
     }
 
-    while (ros::ok())
-    {
-        ros::spin();
-        r.sleep();
-    }
+    rclcpp::spin(node);
 
     if (!offline_) {
         std::cout << "Destroying camera manager" << std::endl;
@@ -315,7 +309,7 @@ int main(int argc, char **argv)
         seekcamera_manager_destroy(&manager);
     }
 
-    ros::shutdown();
+    
+  rclcpp::shutdown();
 
-    return 0;
 }
