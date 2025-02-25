@@ -14,7 +14,7 @@ find_package(cv_bridge REQUIRED)
 find_package(image_proc REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-
+find_package(messages_88 REQUIRED)
 
 ###########
 ## Build ##
@@ -52,6 +52,7 @@ ament_target_dependencies(seek_wrapper_node
   cv_bridge
   sensor_msgs
   std_msgs
+  messages_88
 )
 
 #############

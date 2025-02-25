@@ -33,7 +33,13 @@ Author: Erin Linebarger <erin@robotics88.com>
 
 // OpenCV includes
 #include <cv_bridge/cv_bridge.h>
-#include <opencv2/core.hpp>
+#include <opencv2/opencv.hpp>
+
+// R88 service
+#include "messages_88/srv/record_video.hpp"
+
+
+std::shared_ptr<rclcpp::Node> node_;
 
 rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
 rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_; // Used in offline testing from Seek bag
@@ -41,10 +47,20 @@ rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr thermal_pub_;
 rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
 // rclcpp::Service<sensor_msgs::srv::SetCameraInfo>::SharedPtr set_info_service_;
 
+rclcpp::Service<messages_88::srv::RecordVideo>::SharedPtr record_service_;
+
 bool calibration_mode_ = false;
 bool offline_ = false;
+bool recording_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
+cv::VideoWriter video_writer_;
+cv::VideoWriter video_writer_thermal_;
+
+int frame_width_;
+int frame_height_;
+int thermal_width_;
+int thermal_height_;
 
 // bool setCameraInfo(sensor_msgs::srv::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
 //     camera_info_ = req.camera_info;
@@ -68,8 +84,8 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
         std::cerr << "failed to get frame: " << seekcamera_error_get_str(status) << std::endl;
         return;
     }
-    const int frame_width = (int)seekframe_get_width(frame);
-    const int frame_height = (int)seekframe_get_height(frame);
+    frame_width_ = (int)seekframe_get_width(frame);
+    frame_height_ = (int)seekframe_get_height(frame);
 
     seekframe_t* thermal_frame = nullptr;
     status = seekcamera_frame_get_frame_by_format(camera_frame, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT, &thermal_frame);
@@ -78,11 +94,11 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
         std::cerr << "failed to get thermal frame: " << seekcamera_error_get_str(status) << std::endl;
         return;
     }
-    const int thermal_width = (int)seekframe_get_width(thermal_frame);
-    const int thermal_height = (int)seekframe_get_height(thermal_frame);
+    thermal_width_ = (int)seekframe_get_width(thermal_frame);
+    thermal_height_ = (int)seekframe_get_height(thermal_frame);
 
-    cv::Mat frame_mat(frame_height, frame_width, CV_8UC4, seekframe_get_data(frame));
-    cv::Mat thermal_mat(thermal_height, thermal_width, CV_32FC1, seekframe_get_data(thermal_frame));
+    cv::Mat frame_mat(frame_height_, frame_width_, CV_8UC4, seekframe_get_data(frame));
+    cv::Mat thermal_mat(thermal_height_, thermal_width_, CV_32FC1, seekframe_get_data(thermal_frame));
 
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
     uint64_t time = header->timestamp_utc_ns;
@@ -96,11 +112,17 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     image_msg.image    = frame_mat;
     image_pub_->publish(*(image_msg.toImageMsg()).get());
 
+    if (recording_)
+        video_writer_.write(frame_mat);
+
     image_msg.header.frame_id = "seek";
     image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
     image_msg.image    = thermal_mat;
     thermal_pub_->publish(*(image_msg.toImageMsg()).get());
+
+    if (recording_)
+        video_writer_thermal_.write(thermal_mat);
 
     camera_info_.header = image_msg.header;
     info_pub_->publish(camera_info_);
@@ -252,17 +274,78 @@ void camera_event_callback(seekcamera_t *camera, seekcamera_manager_event_t even
     }
 }
 
+bool startRecording(const std::string &filename) {
+    if (recording_)
+    {
+        RCLCPP_WARN(node_->get_logger(), "Already recording!");
+        return false;
+    }
+
+    video_writer_.open(filename, 
+                        cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
+                        30.0, 
+                        cv::Size(frame_width_, frame_height_));
+
+    if (!video_writer_.isOpened())
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Failed to open video file for writing.");
+        return false;
+    }
+    else {
+        RCLCPP_INFO(node_->get_logger(), "Started recording to %s", filename.c_str());
+    }
+
+    std::string filename_thermal = filename.substr(0, filename.find_last_of(".")) + "_thermal.mp4";
+    video_writer_thermal_.open(filename_thermal, 
+                        cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
+                        30.0, 
+                        cv::Size(thermal_width_, thermal_height_));
+
+    if (!video_writer_thermal_.isOpened())
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Failed to open video file for writing.");
+        return false;
+    }
+    else {
+        RCLCPP_INFO(node_->get_logger(), "Started recording to %s", filename_thermal.c_str());
+    }
+
+    recording_ = true;
+    return true;
+}
+
+bool stopRecording() {
+    if (recording_)
+    {
+      video_writer_.release();
+      recording_ = false;
+      RCLCPP_INFO(node_->get_logger(), "Stopped recording.");
+    }
+    return true;
+}
+
+bool recordVideoCallback(const std::shared_ptr<messages_88::srv::RecordVideo::Request> req,
+    std::shared_ptr<messages_88::srv::RecordVideo::Response> resp) {
+    bool success;
+    if (req->start)
+      success = startRecording(req->filename);
+    else
+      success = stopRecording();
+
+    resp->success = success;
+    return success;
+}
 
 int main(int argc, char **argv)
 {
-  rclcpp::init(argc, argv);
+    rclcpp::init(argc, argv);
 
-  std::shared_ptr<rclcpp::Node> node = rclcpp::Node::make_shared("seek_wrapper");
+    node_ = rclcpp::Node::make_shared("seek_wrapper");
 
-  node->declare_parameter("do_calibrate", calibration_mode_);
-  node->get_parameter("map_frame", calibration_mode_);
-  node->declare_parameter("offline", offline_);
-  node->get_parameter("offline", offline_);
+    node_->declare_parameter("do_calibrate", calibration_mode_);
+    node_->get_parameter("map_frame", calibration_mode_);
+    node_->declare_parameter("offline", offline_);
+    node_->get_parameter("offline", offline_);
 
     // Load camera info from yaml
     std::string camera_name = "seek_thermal";
@@ -270,20 +353,22 @@ int main(int argc, char **argv)
     camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
 
     // ROS setup
-    image_pub_ = node->create_publisher<sensor_msgs::msg::Image>("image", 10);
-    thermal_pub_ = node->create_publisher<sensor_msgs::msg::Image>("image_thermal", 10);
-    info_pub_ = node->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", 10);
+    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("image", 10);
+    thermal_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("image_thermal", 10);
+    info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", 10);
     // TODO bring back calibration and offline modes or delete
-    // set_info_service_ = node->create_service("set_camera_info", &setCameraInfo);
+    // set_info_service_ = node_->create_service("set_camera_info", &setCameraInfo);
     // if (offline_) {
-    //     image_sub_ = node->create_subscription<sensor_msgs::msg::Image>("image_raw", 10, std::bind(&SeekWrapper::imageCallback, node, _1));
+    //     image_sub_ = node_->create_subscription<sensor_msgs::msg::Image>("image_raw", 10, std::bind(&SeekWrapper::imageCallback, node_, _1));
     // }
 
+    // Video recorder service
+    record_service_ = node_->create_service<messages_88::srv::RecordVideo>("~/record", &recordVideoCallback);
 
     seekcamera_manager_t *manager = nullptr;
     if (!offline_) {
         // Create the camera manager.
-        // node is the structure that owns all Seek camera devices.
+        // node_ is the structure that owns all Seek camera devices.
         seekcamera_error_t status = seekcamera_manager_create(&manager, SEEKCAMERA_IO_TYPE_USB);
         if (status != SEEKCAMERA_SUCCESS)
         {
@@ -300,7 +385,7 @@ int main(int argc, char **argv)
         }
     }
 
-    rclcpp::spin(node);
+    rclcpp::spin(node_);
 
     if (!offline_) {
         std::cout << "Destroying camera manager" << std::endl;
