@@ -283,7 +283,7 @@ bool startRecording(const std::string &filename) {
 
     video_writer_.open(filename, 
                         cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
-                        30.0, 
+                        27.0, // fps
                         cv::Size(frame_width_, frame_height_));
 
     if (!video_writer_.isOpened())
@@ -298,7 +298,7 @@ bool startRecording(const std::string &filename) {
     std::string filename_thermal = filename.substr(0, filename.find_last_of(".")) + "_thermal.mp4";
     video_writer_thermal_.open(filename_thermal, 
                         cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
-                        30.0, 
+                        27.0, // fps 
                         cv::Size(thermal_width_, thermal_height_));
 
     if (!video_writer_thermal_.isOpened())
