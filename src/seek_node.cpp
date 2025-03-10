@@ -88,6 +88,42 @@ void imageCallback(const sensor_msgs::msg::Image::ConstPtr &image) {
     info_pub_->publish(camera_info_);
 }
 
+void writeToPoseFile() {
+    // Get the current camera pose from the TF tree
+    geometry_msgs::msg::TransformStamped transform_stamped;
+    try
+    {
+        transform_stamped = tf_buffer_->lookupTransform(map_frame_, "seek_thermal", tf2::TimePointZero);
+        rclcpp::Time transform_time(transform_stamped.header.stamp);
+        if (node_->get_clock()->now() - transform_time > rclcpp::Duration::from_seconds(0.5)) {
+            RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Camera TF is older than 0.5 seconds");
+        }
+    }
+    catch (tf2::TransformException &ex)
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Could not transform: %s", ex.what());
+        return;
+    }
+
+    // TODO make this a service arg
+    int camera_id = 1;
+    std::string image_name = "image_" + std::to_string(frame_count_) + ".png";
+    // Write the pose to the pose file
+    if (pose_file_.is_open())
+    {
+        pose_file_  << frame_count_ << " ";
+        pose_file_  << transform_stamped.transform.rotation.w << " " 
+                    << transform_stamped.transform.rotation.x << " "
+                    << transform_stamped.transform.rotation.y << " " 
+                    << transform_stamped.transform.rotation.z << " ";
+        pose_file_  << transform_stamped.transform.translation.x << " " 
+                    << transform_stamped.transform.translation.y << " " 
+                    << transform_stamped.transform.translation.z << " ";
+        pose_file_  << std::to_string(camera_id) << " " << image_name << "\n";
+        pose_file_  << "\n"; // Leave blank line between frames
+    }
+}
+
 // Handles frame available events.
 void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *camera_frame, void *user_data)
 {
@@ -364,42 +400,6 @@ bool recordVideoCallback(const std::shared_ptr<messages_88::srv::RecordVideo::Re
     resp->success = success;
     return success;
 }
-
-void writeToPoseFile() {
-    // Get the current camera pose from the TF tree
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    try
-    {
-        transform_stamped = tf_buffer_->lookupTransform(map_frame_, "seek_thermal", tf2::TimePointZero);
-        rclcpp::Time transform_time(transform_stamped.header.stamp);
-        if (node_->get_clock()->now() - transform_time > rclcpp::Duration::from_seconds(0.5)) {
-            RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Camera TF is older than 0.5 seconds");
-        }
-    }
-    catch (tf2::TransformException &ex)
-    {
-        RCLCPP_ERROR(node_->get_logger(), "Could not transform: %s", ex.what());
-        return;
-    }
-
-    // TODO make this a service arg
-    int camera_id = 1;
-    std::string image_name = "image_" + std::to_string(frame_count_) + ".png";
-    // Write the pose to the pose file
-    if (pose_file_.is_open())
-    {
-        pose_file_  << frame_count_ << " ";
-        pose_file_  << transform_stamped.transform.rotation.w << " " 
-                    << transform_stamped.transform.rotation.x << " "
-                    << transform_stamped.transform.rotation.y << " " 
-                    << transform_stamped.transform.rotation.z << " ";
-        pose_file_  << transform_stamped.transform.translation.x << " " 
-                    << transform_stamped.transform.translation.y << " " 
-                    << transform_stamped.transform.translation.z << " ";
-        pose_file_  << std::to_string(camera_id) << " " << image_name << "\n";
-        pose_file_  << "\n"; // Leave blank line between frames
-    }
-  }
 
 int main(int argc, char **argv)
 {
