@@ -382,6 +382,8 @@ bool stopRecording() {
             video_writer_.release();
         if (video_writer_thermal_.isOpened())
             video_writer_thermal_.release();
+        if (pose_file_.is_open())
+            pose_file_.close();
         recording_ = false;
         frame_count_ = 0;
         RCLCPP_INFO(node_->get_logger(), "Stopped recording.");
