@@ -7,6 +7,9 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <camera_calibration_parsers/parse.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 // #include <sensor_msgs/srv/set_camera_info.h>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -25,6 +28,7 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <utility>
 #include <condition_variable>
 #include <mutex>
+#include <fstream>
 
 // Seek SDK includes
 #include "seekcamera/seekcamera.h"
@@ -45,7 +49,9 @@ rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
 rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_; // Used in offline testing from Seek bag
 rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr thermal_pub_;
 rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
-// rclcpp::Service<sensor_msgs::srv::SetCameraInfo>::SharedPtr set_info_service_;
+rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr meas_fps_pub_;
+
+rclcpp::TimerBase::SharedPtr meas_fps_timer_;
 
 rclcpp::Service<messages_88::srv::RecordVideo>::SharedPtr record_service_;
 
@@ -57,10 +63,18 @@ sensor_msgs::msg::CameraInfo camera_info_;
 cv::VideoWriter video_writer_;
 cv::VideoWriter video_writer_thermal_;
 
+std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+std::ofstream pose_file_;
+std::string map_frame_ = "map";
+
 int frame_width_;
 int frame_height_;
 int thermal_width_;
 int thermal_height_;
+
+int last_frame_count_ = 0;
+int frame_count_ = 0;
 
 // bool setCameraInfo(sensor_msgs::srv::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
 //     camera_info_ = req.camera_info;
@@ -72,6 +86,42 @@ int thermal_height_;
 void imageCallback(const sensor_msgs::msg::Image::ConstPtr &image) {
     camera_info_.header = image->header;
     info_pub_->publish(camera_info_);
+}
+
+void writeToPoseFile() {
+    // Get the current camera pose from the TF tree
+    geometry_msgs::msg::TransformStamped transform_stamped;
+    try
+    {
+        transform_stamped = tf_buffer_->lookupTransform(map_frame_, "seek_thermal", tf2::TimePointZero);
+        rclcpp::Time transform_time(transform_stamped.header.stamp);
+        if (node_->get_clock()->now() - transform_time > rclcpp::Duration::from_seconds(0.5)) {
+            RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Camera TF is older than 0.5 seconds");
+        }
+    }
+    catch (tf2::TransformException &ex)
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Could not transform: %s", ex.what());
+        return;
+    }
+
+    // TODO make this a service arg
+    int camera_id = 1;
+    std::string image_name = "image_" + std::to_string(frame_count_) + ".png";
+    // Write the pose to the pose file
+    if (pose_file_.is_open())
+    {
+        pose_file_  << frame_count_ << " ";
+        pose_file_  << transform_stamped.transform.rotation.w << " " 
+                    << transform_stamped.transform.rotation.x << " "
+                    << transform_stamped.transform.rotation.y << " " 
+                    << transform_stamped.transform.rotation.z << " ";
+        pose_file_  << transform_stamped.transform.translation.x << " " 
+                    << transform_stamped.transform.translation.y << " " 
+                    << transform_stamped.transform.translation.z << " ";
+        pose_file_  << std::to_string(camera_id) << " " << image_name << "\n";
+        pose_file_  << "\n"; // Leave blank line between frames
+    }
 }
 
 // Handles frame available events.
@@ -112,20 +162,32 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     image_msg.image    = frame_mat;
     image_pub_->publish(*(image_msg.toImageMsg()).get());
 
-    if (recording_)
-        video_writer_.write(frame_mat);
-
-    image_msg.header.frame_id = "seek";
-    image_msg.header.stamp = t;
-    image_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
-    image_msg.image    = thermal_mat;
-    thermal_pub_->publish(*(image_msg.toImageMsg()).get());
-
-    if (recording_)
-        video_writer_thermal_.write(thermal_mat);
+    cv_bridge::CvImage image_msg_thermal;
+    image_msg_thermal.header.frame_id = "seek";
+    image_msg_thermal.header.stamp = t;
+    image_msg_thermal.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
+    image_msg_thermal.image    = thermal_mat;
+    thermal_pub_->publish(*(image_msg_thermal.toImageMsg()).get());
 
     camera_info_.header = image_msg.header;
     info_pub_->publish(camera_info_);
+
+    if (recording_) {
+        if (video_writer_.isOpened())
+        {
+            cv::Mat frame_bgr;
+            cv::cvtColor(frame_mat, frame_bgr, cv::COLOR_BGRA2BGR);
+            video_writer_.write(frame_bgr);
+        }
+        if (video_writer_thermal_.isOpened())
+        {
+            thermal_mat.convertTo(thermal_mat, CV_8UC1);
+            video_writer_thermal_.write(thermal_mat);
+        }
+        writeToPoseFile();
+    }
+
+    frame_count_++;
 }
 
 // Handles camera connect events.
@@ -297,9 +359,9 @@ bool startRecording(const std::string &filename) {
 
     std::string filename_thermal = filename.substr(0, filename.find_last_of(".")) + "_thermal.mp4";
     video_writer_thermal_.open(filename_thermal, 
-                        cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
-                        27.0, // fps 
-                        cv::Size(thermal_width_, thermal_height_));
+                                cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
+                                27.0, // fps 
+                                cv::Size(thermal_width_, thermal_height_), false);
 
     if (!video_writer_thermal_.isOpened())
     {
@@ -311,15 +373,26 @@ bool startRecording(const std::string &filename) {
     }
 
     recording_ = true;
+
+    // Open the pose file
+    std::string pose_filename = filename.substr(0, filename.find_last_of(".")) + "_pose.txt";
+    pose_file_.open(pose_filename);
+
     return true;
 }
 
 bool stopRecording() {
     if (recording_)
     {
-      video_writer_.release();
-      recording_ = false;
-      RCLCPP_INFO(node_->get_logger(), "Stopped recording.");
+        if (video_writer_.isOpened())
+            video_writer_.release();
+        if (video_writer_thermal_.isOpened())
+            video_writer_thermal_.release();
+        if (pose_file_.is_open())
+            pose_file_.close();
+        recording_ = false;
+        frame_count_ = 0;
+        RCLCPP_INFO(node_->get_logger(), "Stopped recording.");
     }
     return true;
 }
@@ -384,6 +457,19 @@ int main(int argc, char **argv)
             return 1;
         }
     }
+
+    meas_fps_pub_ = node_->create_publisher<std_msgs::msg::Float32>("meas_fps", 10);
+
+    // Publish how many frames received in last second
+    meas_fps_timer_ = node_->create_wall_timer(std::chrono::seconds(1), []() {
+      std_msgs::msg::Float32 msg;
+      msg.data = frame_count_ - last_frame_count_;
+      meas_fps_pub_->publish(msg);
+      last_frame_count_ = frame_count_;
+    });
+
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(node_->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     rclcpp::spin(node_);
 

@@ -15,6 +15,7 @@ find_package(image_proc REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(messages_88 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 ###########
 ## Build ##
@@ -53,6 +54,7 @@ ament_target_dependencies(seek_wrapper_node
   sensor_msgs
   std_msgs
   messages_88
+  tf2_ros
 )
 
 #############
