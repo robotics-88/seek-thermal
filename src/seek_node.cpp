@@ -174,10 +174,16 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
 
     if (recording_) {
         if (video_writer_.isOpened())
-            video_writer_.write(frame_mat);
+        {
+            cv::Mat frame_bgr;
+            cv::cvtColor(frame_mat, frame_bgr, cv::COLOR_BGRA2BGR);
+            video_writer_.write(frame_bgr);
+        }
         if (video_writer_thermal_.isOpened())
+        {
+            thermal_mat.convertTo(thermal_mat, CV_8UC1);
             video_writer_thermal_.write(thermal_mat);
-
+        }
         writeToPoseFile();
     }
 
@@ -338,7 +344,7 @@ bool startRecording(const std::string &filename) {
     }
 
     video_writer_.open(filename, 
-                        cv::VideoWriter::fourcc('H', '2', '6', '4'), 
+                        cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
                         27.0, // fps
                         cv::Size(frame_width_, frame_height_));
 
@@ -353,9 +359,9 @@ bool startRecording(const std::string &filename) {
 
     std::string filename_thermal = filename.substr(0, filename.find_last_of(".")) + "_thermal.mp4";
     video_writer_thermal_.open(filename_thermal, 
-                                cv::VideoWriter::fourcc('H', '2', '6', '4'), 
+                                cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
                                 27.0, // fps 
-                                cv::Size(thermal_width_, thermal_height_));
+                                cv::Size(thermal_width_, thermal_height_), false);
 
     if (!video_writer_thermal_.isOpened())
     {
