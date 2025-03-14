@@ -413,7 +413,7 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    node_ = rclcpp::Node::make_shared("seek_wrapper");
+    node_ = rclcpp::Node::make_shared("seek_thermal");
 
     node_->declare_parameter("do_calibrate", calibration_mode_);
     node_->get_parameter("map_frame", calibration_mode_);
