@@ -426,9 +426,9 @@ int main(int argc, char **argv)
     camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
 
     // ROS setup
-    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("image", 10);
-    thermal_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("image_thermal", 10);
-    info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", 10);
+    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image", 10);
+    thermal_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image_thermal", 10);
+    info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("~/camera_info", 10);
     // TODO bring back calibration and offline modes or delete
     // set_info_service_ = node_->create_service("set_camera_info", &setCameraInfo);
     // if (offline_) {
@@ -458,7 +458,7 @@ int main(int argc, char **argv)
         }
     }
 
-    meas_fps_pub_ = node_->create_publisher<std_msgs::msg::Float32>("meas_fps", 10);
+    meas_fps_pub_ = node_->create_publisher<std_msgs::msg::Float32>("~/meas_fps", 10);
 
     // Publish how many frames received in last second
     meas_fps_timer_ = node_->create_wall_timer(std::chrono::seconds(1), []() {
