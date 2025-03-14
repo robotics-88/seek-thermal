@@ -38,15 +38,15 @@ include_directories(
 
 ## Declare a C++ executable
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(seek_wrapper_node src/seek_node.cpp)
+add_executable(seek_thermal_node src/seek_node.cpp)
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(seek_wrapper_node
+target_link_libraries(seek_thermal_node
   seekcamera
   ${OpenCV_LIBRARIES}
 )
 
-ament_target_dependencies(seek_wrapper_node
+ament_target_dependencies(seek_thermal_node
   ament_index_cpp
   rclcpp
   camera_calibration_parsers
@@ -64,7 +64,7 @@ ament_target_dependencies(seek_wrapper_node
 
 ## Mark libraries for installation
 install(TARGETS 
-  seek_wrapper_node
+  seek_thermal_node
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
@@ -84,6 +84,6 @@ ament_export_dependencies(sensor_msgs)
 ament_export_dependencies(ament_cmake)
 ament_export_dependencies(std_msgs)
 
-ament_export_libraries(seek_wrapper_node)
+ament_export_libraries(seek_thermal_node)
 
 ament_package()
