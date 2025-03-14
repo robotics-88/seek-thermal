@@ -156,14 +156,14 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     rclcpp::Time t = rclcpp::Time(sec);
 
     cv_bridge::CvImage image_msg;
-    image_msg.header.frame_id = "seek";
+    image_msg.header.frame_id = "seek_thermal";
     image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
     image_msg.image    = frame_mat;
     image_pub_->publish(*(image_msg.toImageMsg()).get());
 
     cv_bridge::CvImage image_msg_thermal;
-    image_msg_thermal.header.frame_id = "seek";
+    image_msg_thermal.header.frame_id = "seek_thermal";
     image_msg_thermal.header.stamp = t;
     image_msg_thermal.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
     image_msg_thermal.image    = thermal_mat;
