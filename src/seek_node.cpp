@@ -60,6 +60,7 @@ bool offline_ = false;
 bool recording_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
+std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";;
 cv::VideoWriter video_writer_;
 cv::VideoWriter video_writer_thermal_;
 
@@ -416,19 +417,28 @@ int main(int argc, char **argv)
     node_ = rclcpp::Node::make_shared("seek_thermal");
 
     node_->declare_parameter("do_calibrate", calibration_mode_);
-    node_->get_parameter("map_frame", calibration_mode_);
+    node_->get_parameter("do_calibrate", calibration_mode_);
+    node_->declare_parameter("map_frame", map_frame_);
+    node_->get_parameter("map_frame", map_frame_);
     node_->declare_parameter("offline", offline_);
     node_->get_parameter("offline", offline_);
+    node_->declare_parameter("camera_info_path", camera_info_path_);
+    node_->get_parameter("camera_info_path", camera_info_path_);
 
     // Load camera info from yaml
     std::string camera_name = "seek_thermal";
-    std::string yaml_path = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
-    camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
+    if (camera_calibration_parsers::readCalibration(camera_info_path_, camera_name, camera_info_)){
+        info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("~/camera_info", 10);
+        RCLCPP_INFO(node_->get_logger(), "Got camera info from %s", camera_info_path_.c_str());
+    }
+    else {
+        info_pub_ = nullptr;
+        RCLCPP_ERROR(node_->get_logger(), "Cannot get camera info, will not publish");
+    }
 
     // ROS setup
-    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image", 10);
+    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image_raw", 10);
     thermal_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image_thermal", 10);
-    info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("~/camera_info", 10);
     // TODO bring back calibration and offline modes or delete
     // set_info_service_ = node_->create_service("set_camera_info", &setCameraInfo);
     // if (offline_) {
