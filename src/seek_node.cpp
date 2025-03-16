@@ -60,6 +60,7 @@ bool offline_ = false;
 bool recording_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
+std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
 cv::VideoWriter video_writer_;
 cv::VideoWriter video_writer_thermal_;
 
@@ -156,14 +157,14 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     rclcpp::Time t = rclcpp::Time(sec);
 
     cv_bridge::CvImage image_msg;
-    image_msg.header.frame_id = "seek";
+    image_msg.header.frame_id = "seek_thermal";
     image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
     image_msg.image    = frame_mat;
     image_pub_->publish(*(image_msg.toImageMsg()).get());
 
     cv_bridge::CvImage image_msg_thermal;
-    image_msg_thermal.header.frame_id = "seek";
+    image_msg_thermal.header.frame_id = "seek_thermal";
     image_msg_thermal.header.stamp = t;
     image_msg_thermal.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
     image_msg_thermal.image    = thermal_mat;
@@ -413,22 +414,31 @@ int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
-    node_ = rclcpp::Node::make_shared("seek_wrapper");
+    node_ = rclcpp::Node::make_shared("seek_thermal");
 
     node_->declare_parameter("do_calibrate", calibration_mode_);
-    node_->get_parameter("map_frame", calibration_mode_);
+    node_->get_parameter("do_calibrate", calibration_mode_);
+    node_->declare_parameter("map_frame", map_frame_);
+    node_->get_parameter("map_frame", map_frame_);
     node_->declare_parameter("offline", offline_);
     node_->get_parameter("offline", offline_);
+    node_->declare_parameter("camera_info_path", camera_info_path_);
+    node_->get_parameter("camera_info_path", camera_info_path_);
 
     // Load camera info from yaml
     std::string camera_name = "seek_thermal";
-    std::string yaml_path = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
-    camera_calibration_parsers::readCalibration( yaml_path, camera_name, camera_info_);
+    if (camera_calibration_parsers::readCalibration(camera_info_path_, camera_name, camera_info_)){
+        info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("~/camera_info", 10);
+        RCLCPP_INFO(node_->get_logger(), "Got camera info from %s", camera_info_path_.c_str());
+    }
+    else {
+        info_pub_ = nullptr;
+        RCLCPP_ERROR(node_->get_logger(), "Cannot get camera info, will not publish");
+    }
 
     // ROS setup
-    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("image", 10);
-    thermal_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("image_thermal", 10);
-    info_pub_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", 10);
+    image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image_raw", 10);
+    thermal_pub_ = node_->create_publisher<sensor_msgs::msg::Image>("~/image_thermal", 10);
     // TODO bring back calibration and offline modes or delete
     // set_info_service_ = node_->create_service("set_camera_info", &setCameraInfo);
     // if (offline_) {
@@ -458,7 +468,7 @@ int main(int argc, char **argv)
         }
     }
 
-    meas_fps_pub_ = node_->create_publisher<std_msgs::msg::Float32>("meas_fps", 10);
+    meas_fps_pub_ = node_->create_publisher<std_msgs::msg::Float32>("~/meas_fps", 10);
 
     // Publish how many frames received in last second
     meas_fps_timer_ = node_->create_wall_timer(std::chrono::seconds(1), []() {
