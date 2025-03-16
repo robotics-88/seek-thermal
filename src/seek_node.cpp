@@ -60,7 +60,7 @@ bool offline_ = false;
 bool recording_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
-std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";;
+std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
 cv::VideoWriter video_writer_;
 cv::VideoWriter video_writer_thermal_;
 
