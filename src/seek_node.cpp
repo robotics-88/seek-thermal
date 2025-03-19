@@ -107,7 +107,7 @@ void writeToPoseFile() {
     }
     catch (tf2::TransformException &ex)
     {
-        RCLCPP_ERROR(node_->get_logger(), "Could not transform: %s", ex.what());
+        RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Could not transform: %s", ex.what());
         return;
     }
 
