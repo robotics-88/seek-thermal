@@ -52,6 +52,7 @@ rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
 rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr meas_fps_pub_;
 
 rclcpp::TimerBase::SharedPtr meas_fps_timer_;
+rclcpp::TimerBase::SharedPtr record_timer_;
 
 rclcpp::Service<messages_88::srv::RecordVideo>::SharedPtr record_service_;
 
@@ -61,21 +62,25 @@ bool recording_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
 std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
-cv::VideoWriter video_writer_;
-cv::VideoWriter video_writer_thermal_;
+cv::VideoWriter video_writer_, video_writer_thermal_;
+cv::Mat last_frame_mat_, last_thermal_mat_;
 
 std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 std::ofstream pose_file_;
 std::string map_frame_ = "map";
 
+std::mutex frames_mutex_;
+
 int frame_width_;
 int frame_height_;
 int thermal_width_;
 int thermal_height_;
+double fps_ = 27.0;
 
 int last_frame_count_ = 0;
-int frame_count_ = 0;
+std::atomic<int> frame_count_ = 0;
+std::atomic<int> written_frame_count_ = 0;
 
 // bool setCameraInfo(sensor_msgs::srv::SetCameraInfo::Request& req, sensor_msgs::SetCameraInfo::Response& resp) {
 //     camera_info_ = req.camera_info;
@@ -102,17 +107,17 @@ void writeToPoseFile() {
     }
     catch (tf2::TransformException &ex)
     {
-        RCLCPP_ERROR(node_->get_logger(), "Could not transform: %s", ex.what());
+        RCLCPP_ERROR_THROTTLE(node_->get_logger(), *node_->get_clock(), 1000, "Could not transform: %s", ex.what());
         return;
     }
 
     // TODO make this a service arg
     int camera_id = 1;
-    std::string image_name = "image_" + std::to_string(frame_count_) + ".png";
+    std::string image_name = "image_" + std::to_string(written_frame_count_) + ".png";
     // Write the pose to the pose file
     if (pose_file_.is_open())
     {
-        pose_file_  << frame_count_ << " ";
+        pose_file_  << written_frame_count_ << " ";
         pose_file_  << transform_stamped.transform.rotation.w << " " 
                     << transform_stamped.transform.rotation.x << " "
                     << transform_stamped.transform.rotation.y << " " 
@@ -151,6 +156,23 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     cv::Mat frame_mat(frame_height_, frame_width_, CV_8UC4, seekframe_get_data(frame));
     cv::Mat thermal_mat(thermal_height_, thermal_width_, CV_32FC1, seekframe_get_data(thermal_frame));
 
+    { // Lock context
+    std::lock_guard<std::mutex> lock(frames_mutex_);
+    if (last_frame_mat_.empty() || last_frame_mat_.size != frame_mat.size || last_frame_mat_.type() != frame_mat.type()) {
+        last_frame_mat_ = frame_mat.clone();
+    }
+    else {
+        frame_mat.copyTo(last_frame_mat_);
+    }
+
+    if (last_thermal_mat_.empty() || last_thermal_mat_.size != frame_mat.size || last_thermal_mat_.type() != frame_mat.type()) {
+        last_thermal_mat_ = frame_mat.clone();
+    }
+    else {
+        thermal_mat.copyTo(last_thermal_mat_);
+    }
+    }
+
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
     uint64_t time = header->timestamp_utc_ns;
     double sec = time * 1e-9;
@@ -172,22 +194,7 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
 
     camera_info_.header = image_msg.header;
     info_pub_->publish(camera_info_);
-
-    if (recording_) {
-        if (video_writer_.isOpened())
-        {
-            cv::Mat frame_bgr;
-            cv::cvtColor(frame_mat, frame_bgr, cv::COLOR_BGRA2BGR);
-            video_writer_.write(frame_bgr);
-        }
-        if (video_writer_thermal_.isOpened())
-        {
-            thermal_mat.convertTo(thermal_mat, CV_8UC1);
-            video_writer_thermal_.write(thermal_mat);
-        }
-        writeToPoseFile();
-    }
-
+    
     frame_count_++;
 }
 
@@ -346,7 +353,7 @@ bool startRecording(const std::string &filename) {
 
     video_writer_.open(filename, 
                         cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
-                        27.0, // fps
+                        fps_, // fps
                         cv::Size(frame_width_, frame_height_));
 
     if (!video_writer_.isOpened())
@@ -361,7 +368,7 @@ bool startRecording(const std::string &filename) {
     std::string filename_thermal = filename.substr(0, filename.find_last_of(".")) + "_thermal.mp4";
     video_writer_thermal_.open(filename_thermal, 
                                 cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
-                                27.0, // fps 
+                                fps_, // fps 
                                 cv::Size(thermal_width_, thermal_height_), false);
 
     if (!video_writer_thermal_.isOpened())
@@ -392,7 +399,7 @@ bool stopRecording() {
         if (pose_file_.is_open())
             pose_file_.close();
         recording_ = false;
-        frame_count_ = 0;
+        written_frame_count_ = 0;
         RCLCPP_INFO(node_->get_logger(), "Stopped recording.");
     }
     return true;
@@ -408,6 +415,24 @@ bool recordVideoCallback(const std::shared_ptr<messages_88::srv::RecordVideo::Re
 
     resp->success = success;
     return success;
+}
+
+void writeVideo() {
+    if (recording_) {
+        std::lock_guard<std::mutex> lock(frames_mutex_);
+        if (video_writer_.isOpened())
+        {
+            cv::Mat frame_bgr;
+            cv::cvtColor(last_frame_mat_, frame_bgr, cv::COLOR_BGRA2BGR);
+            video_writer_.write(frame_bgr);
+        }
+        if (video_writer_thermal_.isOpened())
+        {
+            last_thermal_mat_.convertTo(last_thermal_mat_, CV_8UC1);
+            video_writer_thermal_.write(last_thermal_mat_);
+        }
+        writeToPoseFile();
+    }
 }
 
 int main(int argc, char **argv)
@@ -477,6 +502,9 @@ int main(int argc, char **argv)
       meas_fps_pub_->publish(msg);
       last_frame_count_ = frame_count_;
     });
+
+    // Timer for recording
+    record_timer_ = node_->create_wall_timer(std::chrono::duration<double>(1.0 / fps_), writeVideo);
 
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(node_->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
