@@ -156,10 +156,21 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     cv::Mat frame_mat(frame_height_, frame_width_, CV_8UC4, seekframe_get_data(frame));
     cv::Mat thermal_mat(thermal_height_, thermal_width_, CV_32FC1, seekframe_get_data(thermal_frame));
 
-    {
+    { // Lock context
     std::lock_guard<std::mutex> lock(frames_mutex_);
-    frame_mat.copyTo(last_frame_mat_);
-    thermal_mat.copyTo(last_thermal_mat_);
+    if (last_frame_mat_.empty() || last_frame_mat_.size != frame_mat.size || last_frame_mat_.type() != frame_mat.type()) {
+        last_frame_mat_ = frame_mat.clone();
+    }
+    else {
+        frame_mat.copyTo(last_frame_mat_);
+    }
+
+    if (last_thermal_mat_.empty() || last_thermal_mat_.size != frame_mat.size || last_thermal_mat_.type() != frame_mat.type()) {
+        last_thermal_mat_ = frame_mat.clone();
+    }
+    else {
+        thermal_mat.copyTo(last_thermal_mat_);
+    }
     }
 
     seekcamera_frame_header_t* header = (seekcamera_frame_header_t*)seekframe_get_header(frame);
