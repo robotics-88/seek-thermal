@@ -408,6 +408,7 @@ bool recordVideoCallback(const std::shared_ptr<messages_88::srv::RecordVideo::Re
 
 void writeVideo() {
     if (recording_) {
+        std::lock_guard<std::mutex> lock(frames_mutex_);
         if (video_writer_.isOpened())
         {
             cv::Mat frame_bgr;
