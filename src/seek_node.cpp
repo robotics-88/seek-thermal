@@ -64,6 +64,7 @@ sensor_msgs::msg::CameraInfo camera_info_;
 std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
 cv::VideoWriter video_writer_, video_writer_thermal_;
 cv::Mat last_frame_mat_, last_thermal_mat_;
+cv::Mat last_rotated_frame_, last_rotated_thermal_;
 
 std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
@@ -154,22 +155,30 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     thermal_height_ = (int)seekframe_get_height(thermal_frame);
 
     cv::Mat frame_mat(frame_height_, frame_width_, CV_8UC4, seekframe_get_data(frame));
+    cv::Mat rotated_frame;
+    cv::rotate(frame_mat, rotated_frame, cv::ROTATE_90_COUNTERCLOCKWISE);
     cv::Mat thermal_mat(thermal_height_, thermal_width_, CV_32FC1, seekframe_get_data(thermal_frame));
+    cv::Mat rotated_thermal;
+    cv::rotate(thermal_mat, rotated_thermal, cv::ROTATE_90_COUNTERCLOCKWISE);
 
     { // Lock context
     std::lock_guard<std::mutex> lock(frames_mutex_);
     if (last_frame_mat_.empty() || last_frame_mat_.size != frame_mat.size || last_frame_mat_.type() != frame_mat.type()) {
         last_frame_mat_ = frame_mat.clone();
+        last_rotated_frame_ = rotated_frame.clone();
     }
     else {
         frame_mat.copyTo(last_frame_mat_);
+        rotated_frame.copyTo(last_rotated_frame_);
     }
 
     if (last_thermal_mat_.empty() || last_thermal_mat_.size != frame_mat.size || last_thermal_mat_.type() != frame_mat.type()) {
         last_thermal_mat_ = frame_mat.clone();
+        last_rotated_thermal_ = rotated_frame.clone();
     }
     else {
         thermal_mat.copyTo(last_thermal_mat_);
+        rotated_thermal.copyTo(last_rotated_thermal_);
     }
     }
 
@@ -182,14 +191,14 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     image_msg.header.frame_id = "seek_thermal";
     image_msg.header.stamp = t;
     image_msg.encoding = sensor_msgs::image_encodings::BGRA8;
-    image_msg.image    = frame_mat;
+    image_msg.image    = rotated_frame;
     image_pub_->publish(*(image_msg.toImageMsg()).get());
 
     cv_bridge::CvImage image_msg_thermal;
     image_msg_thermal.header.frame_id = "seek_thermal";
     image_msg_thermal.header.stamp = t;
     image_msg_thermal.encoding = sensor_msgs::image_encodings::TYPE_32FC1;
-    image_msg_thermal.image    = thermal_mat;
+    image_msg_thermal.image    = rotated_thermal;
     thermal_pub_->publish(*(image_msg_thermal.toImageMsg()).get());
 
     camera_info_.header = image_msg.header;
