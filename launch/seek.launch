@@ -2,9 +2,11 @@
     <arg name="use_rviz" default="true" />
     <arg name="do_calibrate" default="false"/>
     <arg name="offline" default="false"/>
+    <arg name="rotate" default="false"/>
     <node pkg="seek_thermal_88" exec="seek_thermal_node" output="screen" respawn="true">
         <param name="do_calibrate" value="$(var do_calibrate)"/>
         <param name="offline" value="$(var offline)"/>
+        <param name="rotate" value="$(var rotate)"/>
     </node>
 
     <node exec="rviz2" name="seek_rviz" pkg="rviz2" args="-d $(find-pkg-share seek_thermal_88)/config/seek.rviz" if="$(var use_rviz)" />
