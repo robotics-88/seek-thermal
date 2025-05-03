@@ -75,6 +75,8 @@ std::mutex frames_mutex_;
 
 int frame_width_;
 int frame_height_;
+int recording_width_;
+int recording_height_;
 int thermal_width_;
 int thermal_height_;
 double fps_ = 27.0;
@@ -143,6 +145,8 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     }
     frame_width_ = (int)seekframe_get_width(frame);
     frame_height_ = (int)seekframe_get_height(frame);
+    recording_width_ = frame_width_;
+    recording_height_ = frame_height_;
 
     seekframe_t* thermal_frame = nullptr;
     status = seekcamera_frame_get_frame_by_format(camera_frame, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT, &thermal_frame);
@@ -159,6 +163,8 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     if (rotate_) {
         cv::rotate(frame_mat, frame_mat, cv::ROTATE_90_COUNTERCLOCKWISE);
         cv::rotate(thermal_mat, thermal_mat, cv::ROTATE_90_COUNTERCLOCKWISE);
+        recording_width_ = frame_height_;
+        recording_height_ = frame_width_;
     }
 
     { // Lock context
@@ -359,7 +365,7 @@ bool startRecording(const std::string &filename) {
     video_writer_.open(filename, 
                         cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
                         fps_, // fps
-                        cv::Size(frame_width_, frame_height_));
+                        cv::Size(recording_width_, recording_height_));
 
     if (!video_writer_.isOpened())
     {
