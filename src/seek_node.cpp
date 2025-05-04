@@ -59,6 +59,7 @@ rclcpp::Service<messages_88::srv::RecordVideo>::SharedPtr record_service_;
 bool calibration_mode_ = false;
 bool offline_ = false;
 bool recording_ = false;
+bool rotate_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
 std::string camera_info_path_ = ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
@@ -74,6 +75,8 @@ std::mutex frames_mutex_;
 
 int frame_width_;
 int frame_height_;
+int recording_width_;
+int recording_height_;
 int thermal_width_;
 int thermal_height_;
 double fps_ = 27.0;
@@ -142,6 +145,8 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
     }
     frame_width_ = (int)seekframe_get_width(frame);
     frame_height_ = (int)seekframe_get_height(frame);
+    recording_width_ = frame_width_;
+    recording_height_ = frame_height_;
 
     seekframe_t* thermal_frame = nullptr;
     status = seekcamera_frame_get_frame_by_format(camera_frame, SEEKCAMERA_FRAME_FORMAT_THERMOGRAPHY_FLOAT, &thermal_frame);
@@ -155,6 +160,12 @@ void handle_camera_frame_available(seekcamera_t *camera, seekcamera_frame_t *cam
 
     cv::Mat frame_mat(frame_height_, frame_width_, CV_8UC4, seekframe_get_data(frame));
     cv::Mat thermal_mat(thermal_height_, thermal_width_, CV_32FC1, seekframe_get_data(thermal_frame));
+    if (rotate_) {
+        cv::rotate(frame_mat, frame_mat, cv::ROTATE_90_COUNTERCLOCKWISE);
+        cv::rotate(thermal_mat, thermal_mat, cv::ROTATE_90_COUNTERCLOCKWISE);
+        recording_width_ = frame_height_;
+        recording_height_ = frame_width_;
+    }
 
     { // Lock context
     std::lock_guard<std::mutex> lock(frames_mutex_);
@@ -352,9 +363,9 @@ bool startRecording(const std::string &filename) {
     }
 
     video_writer_.open(filename, 
-                        cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
+                        cv::VideoWriter::fourcc('h', '2', '6', '4'), 
                         fps_, // fps
-                        cv::Size(frame_width_, frame_height_));
+                        cv::Size(recording_width_, recording_height_));
 
     if (!video_writer_.isOpened())
     {
@@ -367,9 +378,9 @@ bool startRecording(const std::string &filename) {
 
     std::string filename_thermal = filename.substr(0, filename.find_last_of(".")) + "_thermal.mp4";
     video_writer_thermal_.open(filename_thermal, 
-                                cv::VideoWriter::fourcc('m', 'p', '4', 'v'), 
+                                cv::VideoWriter::fourcc('h', '2', '6', '4'), 
                                 fps_, // fps 
-                                cv::Size(thermal_width_, thermal_height_), false);
+                                cv::Size(recording_width_, recording_height_), false);
 
     if (!video_writer_thermal_.isOpened())
     {
@@ -449,6 +460,8 @@ int main(int argc, char **argv)
     node_->get_parameter("offline", offline_);
     node_->declare_parameter("camera_info_path", camera_info_path_);
     node_->get_parameter("camera_info_path", camera_info_path_);
+    node_->declare_parameter("rotate", rotate_);
+    node_->get_parameter("rotate", rotate_);
 
     // Load camera info from yaml
     std::string camera_name = "seek_thermal";
