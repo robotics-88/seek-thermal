@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <package format="3">
-  <name>seek_thermal_88</name>
+  <name>seek_thermal</name>
   <version>1.0.0</version>
   <description>ROS2 wrapper for Seek camera SDK v4.3</description>
 
@@ -44,7 +44,6 @@
   <exec_depend>image_proc</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 
-  <depend>messages_88</depend>
   <depend>tf2_ros</depend>
 
 

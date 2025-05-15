@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(seek_thermal_88)
+project(seek_thermal)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -14,7 +14,6 @@ find_package(cv_bridge REQUIRED)
 find_package(image_proc REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(messages_88 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 ###########
@@ -53,7 +52,6 @@ ament_target_dependencies(seek_thermal_node
   cv_bridge
   sensor_msgs
   std_msgs
-  messages_88
   tf2_ros
 )
 

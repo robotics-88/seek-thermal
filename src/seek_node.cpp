@@ -8,6 +8,7 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 // #include <sensor_msgs/srv/set_camera_info.h>
@@ -39,9 +40,6 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 
-// R88 service
-#include "messages_88/srv/record_video.hpp"
-
 std::shared_ptr<rclcpp::Node> node_;
 
 rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
@@ -54,7 +52,7 @@ rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr meas_fps_pub_;
 rclcpp::TimerBase::SharedPtr meas_fps_timer_;
 rclcpp::TimerBase::SharedPtr record_timer_;
 
-rclcpp::Service<messages_88::srv::RecordVideo>::SharedPtr record_service_;
+rclcpp::Subscription<std_msgs::msg::String>::SharedPtr trigger_recording_sub_;
 
 bool calibration_mode_ = false;
 bool offline_ = false;
@@ -63,7 +61,7 @@ bool rotate_ = false;
 
 sensor_msgs::msg::CameraInfo camera_info_;
 std::string camera_info_path_ =
-    ament_index_cpp::get_package_share_directory("seek_thermal_88") + "/config/calibration.yaml";
+    ament_index_cpp::get_package_share_directory("seek_thermal") + "/config/calibration.yaml";
 cv::VideoWriter video_writer_, video_writer_thermal_;
 cv::Mat last_frame_mat_, last_thermal_mat_;
 
@@ -92,6 +90,15 @@ std::atomic<int> written_frame_count_ = 0;
 //     resp.success = true;
 //     return true;
 // }
+
+std::string get_time_str() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::tm now_tm = *std::gmtime(&now_time);
+    std::stringstream ss;
+    ss << std::put_time(&now_tm, "%Y-%m-%d_%H-%M-%S");
+    return ss.str();
+}
 
 // Used only in offline testing from Seek bag
 void imageCallback(const sensor_msgs::msg::Image::ConstPtr &image) {
@@ -365,7 +372,9 @@ void camera_event_callback(seekcamera_t *camera, seekcamera_manager_event_t even
     }
 }
 
-bool startRecording(const std::string &filename) {
+bool startRecording(const std::string data_directory) {
+    std::string filename = data_directory + "/seek_thermal_" + get_time_str() + ".mp4";
+
     if (recording_) {
         RCLCPP_WARN(node_->get_logger(), "Already recording!");
         return false;
@@ -418,16 +427,11 @@ bool stopRecording() {
     return true;
 }
 
-bool recordVideoCallback(const std::shared_ptr<messages_88::srv::RecordVideo::Request> req,
-                         std::shared_ptr<messages_88::srv::RecordVideo::Response> resp) {
-    bool success;
-    if (req->start)
-        success = startRecording(req->filename);
+void triggerRecordingCallback(const std_msgs::msg::String::SharedPtr msg) {
+    if (!msg->data.empty())
+        startRecording(msg->data);
     else
-        success = stopRecording();
-
-    resp->success = success;
-    return success;
+        stopRecording();
 }
 
 void writeVideo() {
@@ -483,8 +487,8 @@ int main(int argc, char **argv) {
     // }
 
     // Video recorder service
-    record_service_ =
-        node_->create_service<messages_88::srv::RecordVideo>("~/record", &recordVideoCallback);
+    trigger_recording_sub_ = node_->create_subscription<std_msgs::msg::String>(
+        "/trigger_recording", 10, &triggerRecordingCallback);
 
     seekcamera_manager_t *manager = nullptr;
     if (!offline_) {
