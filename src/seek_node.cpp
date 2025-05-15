@@ -8,6 +8,7 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 // #include <sensor_msgs/srv/set_camera_info.h>
@@ -39,9 +40,6 @@ Author: Erin Linebarger <erin@robotics88.com>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 
-// Trigger recording
-#include "seek_thermal_msgs/msg/trigger_recording.hpp"
-
 std::shared_ptr<rclcpp::Node> node_;
 
 rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
@@ -54,7 +52,7 @@ rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr meas_fps_pub_;
 rclcpp::TimerBase::SharedPtr meas_fps_timer_;
 rclcpp::TimerBase::SharedPtr record_timer_;
 
-rclcpp::Subscription<seek_thermal_msgs::msg::TriggerRecording>::SharedPtr trigger_recording_sub_;
+rclcpp::Subscription<std_msgs::msg::String>::SharedPtr trigger_recording_sub_;
 
 bool calibration_mode_ = false;
 bool offline_ = false;
@@ -429,9 +427,9 @@ bool stopRecording() {
     return true;
 }
 
-void triggerRecordingCallback(const seek_thermal_msgs::msg::TriggerRecording::SharedPtr msg) {
-    if (msg->start)
-        startRecording(msg->data_directory);
+void triggerRecordingCallback(const std_msgs::msg::String::SharedPtr msg) {
+    if (!msg->data.empty())
+        startRecording(msg->data);
     else
         stopRecording();
 }
@@ -489,8 +487,8 @@ int main(int argc, char **argv) {
     // }
 
     // Video recorder service
-    trigger_recording_sub_ = node_->create_subscription<seek_thermal_msgs::msg::TriggerRecording>(
-        "/trigger_seek_recording", 10, &triggerRecordingCallback);
+    trigger_recording_sub_ = node_->create_subscription<std_msgs::msg::String>(
+        "/trigger_recording", 10, &triggerRecordingCallback);
 
     seekcamera_manager_t *manager = nullptr;
     if (!offline_) {

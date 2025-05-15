@@ -44,7 +44,6 @@
   <exec_depend>image_proc</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 
-  <depend>seek_thermal_msgs</depend>
   <depend>tf2_ros</depend>
 
 

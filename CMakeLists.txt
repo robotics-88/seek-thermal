@@ -14,7 +14,6 @@ find_package(cv_bridge REQUIRED)
 find_package(image_proc REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(seek_thermal_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 ###########
@@ -53,7 +52,6 @@ ament_target_dependencies(seek_thermal_node
   cv_bridge
   sensor_msgs
   std_msgs
-  seek_thermal_msgs
   tf2_ros
 )
 
